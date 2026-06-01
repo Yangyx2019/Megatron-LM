@@ -19,6 +19,10 @@ from . import arguments
 
 def _get_inprocess_module():
     try:
+        """
+            importlib.import_module是运行时动态导入，而import语句是在编译时静态导入
+            todo: 回头再来看nvidia_resiliency_ext.inprocess
+        """
         return importlib.import_module("nvidia_resiliency_ext.inprocess")
     except ImportError:
         return None
@@ -131,10 +135,34 @@ def inprocess_restart(train, args):
 def maybe_wrap_for_inprocess_restart(pretrain):
 
     args = arguments.parse_args(ignore_unknown_args=True)
+    """
+        inprocess_restart参数的意义：
+            如果为True，则启用inprocess_restart功能，在训练过程中如果检测到某些错误（如节点故障），
+            可以自动重启训练过程，而不需要手动干预。这对于分布式训练非常有用，可以提高训练的鲁棒性和效率。
+            具体来说，当inprocess_restart启用时，训练过程会被包装在一个inprocess_restart的上下文中，
+            这个上下文会监控训练过程中的状态，并在检测到错误时自动重启训练过程。
+            重启过程中会执行一些清理操作，如销毁当前的训练状态，重置一些变量等，
+            以确保重启后的训练过程能够正确地继续进行。
 
+            比直接从checkpoint重新拉起训练快。
+    """
     if args.inprocess_restart:
         pretrain = inprocess_restart(pretrain, args)
+        """
+        torch中用于tcp通信的工具。每个进程都调用这个api，rank0作为master，其他rank作为worker，进行通信同步。
+        如果其他rank调用了这个api但是rank0没有调用，那么其他rank会一直等待，直到rank0调用了这个api。
+        eg:
 
+            import torch.distributed as dist
+            from datetime import timedelta
+            # Run on process 1 (server)
+            server_store = dist.TCPStore("127.0.0.1", 1234, 2, True, timedelta(seconds=30))
+            # Run on process 2 (client)
+            client_store = dist.TCPStore("127.0.0.1", 1234, 2, False)
+            # Use any of the store methods from either the client or server after initialization
+            server_store.set("first_key", "first_value")
+            client_store.get("first_key")
+        """
         store = torch.distributed.TCPStore(
             host_name=os.environ['MASTER_ADDR'],
             port=int(os.environ['MASTER_PORT'])+1,

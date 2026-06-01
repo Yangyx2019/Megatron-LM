@@ -387,6 +387,8 @@ if __name__ == "__main__":
     set_startup_timestamps(program_start=_PROGRAM_START_TIME, main_entry=_MAIN_ENTRY_TIME)
 
     # Temporary for transition to core datasets
+    # 与train_valid_test_datasets_provider.is_distributed = True写法等价
+    # python中函数也是一个对象，也可以有属性
     setattr(train_valid_test_datasets_provider, "is_distributed", True)
 
     # Optionally enable inprocess restart on pretrain
